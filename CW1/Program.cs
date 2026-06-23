@@ -1,44 +1,29 @@
 ﻿using CW1.Models;
 using CW1.Services;
 
-var displayService = new BlockChainDisplayService();
-var hashingService = new HashingService();
+BlockChainService blockchain = new BlockChainService();
+WalletService walletService = new WalletService(blockchain.Chain);
 
-var blockchainService = new BlockChainService();
-var transactionService = new TransactionService();
+string minerAddress = "0x1234567890abcdef1234567890abcdef12345678";
+string userA = "0xaaaa567890abcdef1234567890abcdef123456aa";
+string userB = "0xbbbb567890abcdef1234567890abcdef123456bb";
+string invalidUser = "Bob";
 
-var transactions = new List<Transaction>();
+//#1
+Transaction badTx = new Transaction(userA, invalidUser, 10, new byte[0]);
+var validationResult = blockchain.FindBlockByHash("") == null;
 
-for (int i = 1; i < 10; i++)
+List<Transaction> testBadList = new List<Transaction> { badTx };
+blockchain.ProcessTransactions(testBadList, minerAddress);
+
+//#2
+List<Transaction> incomingTransactions = new List<Transaction>();
+
+for (int i = 1; i <= 15; i++)
 {
-    var transaction = transactionService.CreateTransaction($"UserTestTesttest{i}", $"UserTest{i + 1}", i * 10);
-    transactions.Add(transaction);
+    Transaction tx = new Transaction("COINBASE", userB, i * 2, new byte[0]);
+    incomingTransactions.Add(tx);
 }
+blockchain.ProcessTransactions(incomingTransactions, minerAddress);
 
-
-while (true)
-{
-    Console.WriteLine("Menu:");
-    Console.WriteLine("1. Add Block");
-    Console.WriteLine("2. Print BlockChain");
-    Console.WriteLine("3. Validate BlockChain");
-    Console.WriteLine("4. Add Transaction");
-    Console.WriteLine("5. Exit");
-    Console.Write("Choose an option: ");
-    var choice = Console.ReadLine();
-
-    switch (choice) 
-    {
-        case "1":
-            blockchainService.AddBlock(transactions);
-            Console.WriteLine("Block added successfully.");
-            break;
-        case "2":
-            displayService.PrintBlockChain(blockchainService.Chain);
-            break;
-        case "3":
-            bool isValid = blockchainService.IsValid();
-            displayService.PrintValidationResult(isValid);
-            break;
-    }
-}
+Console.WriteLine(blockchain.Chain.Count);

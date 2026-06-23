@@ -23,7 +23,8 @@ namespace CW1.Services
 
         public long MineBlock(Block block, int difficulty)
         {
-            string target = new string('0', difficulty);
+            //string target = new string('0', difficulty);
+            string target = "CAFE";
             _winningBlock = null;
             _found = false;
             _totalHashesChecked = 0;
@@ -43,6 +44,8 @@ namespace CW1.Services
                     Block newBlock = block.Copy();
                     newBlock.Nonce = nonce;
                     newBlock.Hash = _hashingService.ComputeHash(newBlock);
+
+                    //Console.WriteLine($"Checking nonce: {newBlock.Hash}");
 
                     localHashes++;
 
@@ -79,23 +82,24 @@ namespace CW1.Services
             double khs = hashrate / 1000;
             double mhs = khs / 1000;
 
-            Console.WriteLine("\n--- MINING RESULTS ---");
-            Console.WriteLine($"Threads Used:          {threadsCount}");
-            Console.WriteLine($"Difficulty:            {difficulty}");
-            Console.WriteLine($"Time Elapsed:          {duration:F4} seconds");
-            Console.WriteLine($"Total Hashes Checked:  {_totalHashesChecked:N0}");
+            //Console.WriteLine("\n--- MINING RESULTS ---");
+            //Console.WriteLine($"Threads Used:          {threadsCount}");
+            //Console.WriteLine($"Difficulty:            {difficulty}");
+            //Console.WriteLine($"Time Elapsed:          {duration:F4} seconds");
+            //Console.WriteLine($"Total Hashes Checked:  {_totalHashesChecked:N0}");
 
-            if (mhs >= 1)
-                Console.WriteLine($"Final Hashrate:        {mhs:F2} MH/s");
-            else
-                Console.WriteLine($"Final Hashrate:        {khs:F2} KH/s");
+            //if (mhs >= 1)
+            //    Console.WriteLine($"Final Hashrate:        {mhs:F2} MH/s");
+            //else
+            //    Console.WriteLine($"Final Hashrate:        {khs:F2} KH/s");
 
-            Console.WriteLine($"Winning Nonce:         {_winningBlock.Nonce}");
-            Console.WriteLine($"Block Hash:            {_winningBlock.Hash}");
-            Console.WriteLine("-----------------------\n");
+            //Console.WriteLine($"Winning Nonce:         {_winningBlock.Nonce}");
+            //Console.WriteLine($"Block Hash:            {_winningBlock.Hash}");
+            //Console.WriteLine("-----------------------\n");
 
             block.Nonce = _winningBlock.Nonce;
             block.Hash = _winningBlock.Hash;
+            block.DiffucultyText = target;
             return _winningBlock.Nonce;
         }
     }
