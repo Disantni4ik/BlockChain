@@ -3,27 +3,33 @@ using CW1.Services;
 
 BlockChainService blockchain = new BlockChainService();
 WalletService walletService = new WalletService(blockchain.Chain);
+VanityWalletService vanityWalletService = new VanityWalletService();
 
-string minerAddress = "0x1234567890abcdef1234567890abcdef12345678";
-string userA = "0xaaaa567890abcdef1234567890abcdef123456aa";
-string userB = "0xbbbb567890abcdef1234567890abcdef123456bb";
-string invalidUser = "Bob";
+Wallet userWallet = vanityWalletService.MineWallet("aa").wallet;
+string authMessage = "This is my custom wallet";
 
 //#1
-Transaction badTx = new Transaction(userA, invalidUser, 10, new byte[0]);
-var validationResult = blockchain.FindBlockByHash("") == null;
+byte[] userSignature = walletService.SignMessage(userWallet, authMessage);
 
-List<Transaction> testBadList = new List<Transaction> { badTx };
-blockchain.ProcessTransactions(testBadList, minerAddress);
+bool isUserValid = walletService.VerifyMessage(userWallet.Address, userWallet.PublicKey, authMessage, userSignature);
+
+if (isUserValid)
+{
+    Console.WriteLine("Authorization successful\n");
+}
 
 //#2
-List<Transaction> incomingTransactions = new List<Transaction>();
+Wallet hackerWallet = walletService.CreateWallet("Hacker");
 
-for (int i = 1; i <= 15; i++)
+byte[] hacherSignature = walletService.SignMessage(hackerWallet, authMessage);
+
+bool isHackerValid = walletService.VerifyMessage(userWallet.Address, hackerWallet.PublicKey, authMessage, hacherSignature);
+
+if (!isHackerValid)
 {
-    Transaction tx = new Transaction("COINBASE", userB, i * 2, new byte[0]);
-    incomingTransactions.Add(tx);
+    Console.WriteLine("Hacking attempt blocked");
+}else
+{
+    Console.WriteLine("The server let the hacker in");
 }
-blockchain.ProcessTransactions(incomingTransactions, minerAddress);
 
-Console.WriteLine(blockchain.Chain.Count);

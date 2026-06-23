@@ -26,7 +26,7 @@ namespace CW1.Services
                 Console.WriteLine(Hash);
                 if (Hash.StartsWith(desiredPrefix))
                 {
-                    Console.WriteLine($"FOUND :{Hash}");
+                    Console.WriteLine($"FOUND :{Hash} | Attempts: {attempts}");
                     return (new Wallet($"User_{desiredPrefix}", Hash, PublicKey, PrivateKey), attempts);
                 }
                 attempts++;
