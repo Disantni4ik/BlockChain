@@ -13,23 +13,38 @@ namespace CW1.Models
         public string To { get; set; }
         public decimal Amount { get; set; }
         public DateTime TimeStamp { get; set; }
-
-        public Transaction(string from, string to, decimal amount)
+        public decimal Fee { get; set; }
+        public byte[] SenderPublicKey { get; set; }
+        public byte[] Signature { get; set; }
+        public Transaction()
+        {
+            
+        }
+        public Transaction(string from, string to, decimal amount, byte[] senderPublicKey)
         {
             From = from;
             To = to;
             Amount = amount;
             TimeStamp = DateTime.UtcNow;
-            var rawString = ToRawString();
+            SenderPublicKey = senderPublicKey;
+            var rawString = $"From:{From},To:{To},Amount:{Amount},TimeStamp:{TimeStamp:O}";
             byte[] bytes = Encoding.UTF8.GetBytes(rawString);
             byte[] hashBytes = SHA256.HashData(bytes);
             Id = Convert.ToBase64String(hashBytes);
         }
         public string ToRawString()
         {
-            return $"From:{From},To:{To},Amount:{Amount}";
+            if (Signature == null)
+            {
+                return $"From:{From},To:{To},Amount:{Amount},TimeStamp:{TimeStamp:O}";
+            }
+            return $"From:{From},To:{To},Amount:{Amount},TimeStamp:{TimeStamp:O},Fee:{Fee} {Convert.ToHexString(Signature)}";
         }
-
+        public byte[] GetDataToSign()
+        {
+            string raw = $"{Id}{From}{To}{Amount}{TimeStamp:O}{Fee}";
+            return Encoding.UTF8.GetBytes(raw);
+        }
     }
 
 }

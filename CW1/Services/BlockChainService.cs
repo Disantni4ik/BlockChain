@@ -13,21 +13,51 @@ namespace CW1.Services
         private readonly HashingService _hashingService;
         private readonly MiningService _miningService;
         private readonly TransactionService _transactionService;
+        private readonly WalletService _walletService;
+        private readonly FileStorageService _fileStorageService;
 
         public int Difficulty { get; set; }
         public double _targetBlockTime = 10;
+        public int MaxBlockSizeBytes { get; } = 2048;
+        public int MaxMempoolSize { get; } = 5;
+        public decimal MaxSuply { get; } = 1000;
+        public decimal TotalMined { get; private set; } = 0;
+
         private readonly int _adjustmentInterval = 2;
-        public int MaxBlockSizeBytes { get; } = 256;
+        private readonly decimal _rewardAmount = 20;
+        private readonly int maxTransactionAmount = 2;
+
+        public List<Transaction> PendingTransactions { get; set; } = new List<Transaction>();
 
         public BlockChainService()
         {
             Chain = new List<Block>();
+            _fileStorageService = new FileStorageService();
             _hashingService = new HashingService();
             _miningService = new MiningService(_hashingService);
-            _transactionService = new TransactionService();
             Difficulty = 5;
+            _transactionService = new TransactionService(Chain);
+            _walletService = new WalletService(Chain);
 
-            CreateGenesisBlock();
+
+            var loadedChain = _fileStorageService.LoadBlockChain();
+
+            if (loadedChain != null && loadedChain.Count > 0)
+            {
+                Chain = loadedChain;
+                _transactionService = new TransactionService(Chain);
+                _walletService = new WalletService(Chain);
+            }
+            else
+            {
+                CreateGenesisBlock();
+                _fileStorageService.SaveBlockchain(Chain);
+            }
+
+            if (!IsValid())
+            {
+                throw new Exception("BlockChain Is invalid");
+            }
         }
         private void CreateGenesisBlock()
         {
@@ -36,36 +66,61 @@ namespace CW1.Services
             genesisBlock.Hash = _hashingService.ComputeHash(genesisBlock);
             Chain.Add(genesisBlock);
         }
-        public void AddBlock(List<Transaction> transactions)
+        public void MineBlock(string minerAdress)
         {
             List<Transaction> validTransactions = new();
             int totalSize = 0;
+            decimal tempBalance = _walletService.GetBalance(minerAdress);
 
-            foreach (Transaction transaction in transactions)
+            foreach (Transaction transaction in PendingTransactions)
             {
+                if (tempBalance - transaction.Amount < 0) {
+                    continue;
+                }
+                tempBalance -= transaction.Amount;
+
                 if (!_transactionService.ValidateTransaction(transaction).isValid)
                 {
                     throw new InvalidOperationException("Invalid transaction found.");
                 }
 
-                int txSize = Encoding.UTF8.GetByteCount(transaction.ToRawString());
+                //int txSize = Encoding.UTF8.GetByteCount(transaction.ToRawString());
 
-                if (totalSize + txSize > MaxBlockSizeBytes)
-                {
-                    Console.WriteLine("Block is full. Remaining transactions skipped.");
-                    break;
-                }
+                //if (totalSize + txSize > MaxBlockSizeBytes)
+                //{
+                //    Console.WriteLine("Block is full. Remaining transactions skipped.");
+                //    break;
+                //}
 
                 validTransactions.Add(transaction);
-                totalSize += txSize;
+                //totalSize += txSize;
             }
 
             Block previousBlock = Chain.Last();
+            
+            var sortedTransactions = validTransactions.OrderByDescending(t => t.Fee).Take(maxTransactionAmount).ToList();
+
+            PendingTransactions.RemoveAll(t => sortedTransactions.Contains(t));
+
+            var totalReward = sortedTransactions.Sum(t => t.Fee) + _rewardAmount;
+
+            if (TotalMined + _rewardAmount <= MaxSuply)
+            {
+                var rewardTransaction = new Transaction("COINBASE", minerAdress, totalReward, new byte[0]);
+                sortedTransactions.Add(rewardTransaction);
+                TotalMined += _rewardAmount;
+            }
+            else if (TotalMined + _rewardAmount > MaxSuply && TotalMined <= MaxSuply)
+            {
+                var rewardTransaction = new Transaction("COINBASE", minerAdress, MaxSuply - TotalMined + totalReward, new byte[0]);
+                sortedTransactions.Add(rewardTransaction);
+                TotalMined += MaxSuply - TotalMined;
+            }
 
             Block newBlock = new Block(
                 previousBlock.Index + 1,
                 DateTime.UtcNow,
-                validTransactions,
+                sortedTransactions,
                 previousBlock.Hash,
                 Difficulty
             )
@@ -74,7 +129,10 @@ namespace CW1.Services
             };
 
             _miningService.MineBlock(newBlock, Difficulty);
+
             Chain.Add(newBlock);
+
+            _fileStorageService.SaveBlockchain(Chain);
 
             if (newBlock.Index % _adjustmentInterval == 0)
             {
@@ -109,6 +167,16 @@ namespace CW1.Services
             {
                 Block currentBlock = Chain[i];
                 Block previousBlock = Chain[i - 1];
+
+                foreach (var transaction in currentBlock.Transactions)
+                {
+                    if (transaction.From != "COINBASE" && !_walletService.VerifySignature(transaction.From, transaction.Signature, transaction.GetDataToSign()))
+                    {
+                        Console.WriteLine($"[CRITICAL THREAT] A fake transaction was detected in block {currentBlock.Index}");
+                        return false;
+                    }
+                }
+
                 if (currentBlock.Hash != _hashingService.ComputeHash(currentBlock))
                 {
                     return false;
@@ -118,7 +186,11 @@ namespace CW1.Services
                     return false;
                 }
 
-                if (!currentBlock.Hash.StartsWith(new string('0', currentBlock.Difficulty)))
+                //if (!currentBlock.Hash.StartsWith(new string('0', currentBlock.Difficulty)))
+                //{
+                //    return false;
+                //}`    
+                if (!currentBlock.Hash.StartsWith(currentBlock.DiffucultyText))
                 {
                     return false;
                 }
@@ -194,6 +266,72 @@ namespace CW1.Services
                 }
             }
             return null;
+        }
+        public void AddTransactionToMempool(Transaction transaction)
+        {
+            var validationResult = _transactionService.ValidateTransaction(transaction);
+            if (!validationResult.isValid)
+            {
+                throw new InvalidOperationException($"Invalid transaction: {validationResult.errorMessage}");
+            }
+
+            if (transaction.From != "COINBASE")
+            {
+                var senderBalance = GetPendingBalance(transaction.From);
+                if (senderBalance < transaction.Amount + transaction.Fee)
+                {
+                    return;
+                }
+
+                if (PendingTransactions.Find(t => t.From == transaction.From && t.To == transaction.To && t.Amount == transaction.Amount) != null)
+                {
+                    var transactionCopy = PendingTransactions.Find(t => t.From == transaction.From && t.To == transaction.To && t.Amount == transaction.Amount);
+                    if (transaction.Fee > transactionCopy.Fee)
+                    {
+                        PendingTransactions.Remove(transactionCopy);
+                        PendingTransactions.Add(transaction);
+                        return;
+                    }
+                    //}else
+                    //{
+                    //    return;
+                    //    //throw new Exception("A similar transaction already exists. Increase fee to replace");
+                    //}
+                }
+
+                if (PendingTransactions.Count >= MaxMempoolSize)
+                {
+                    var minFeeTransaction = PendingTransactions.OrderByDescending(t => t.Fee).ToList()[PendingTransactions.Count - 1];
+                    if (transaction.Fee > minFeeTransaction.Fee)
+                    {
+                        PendingTransactions.Remove(minFeeTransaction);
+                        PendingTransactions.Add(transaction);
+                        return;
+                    }
+                    else
+                    {
+                        throw new Exception("Mempool is full. Fee is too low");
+                    }
+                    
+                }
+                PendingTransactions.Add(transaction);
+            }
+        }
+        private decimal GetPendingBalance(string address)
+        {
+            var balance = _walletService.GetBalance(address);
+            foreach (var transaction in PendingTransactions)
+            {
+                if (transaction.From == address)
+                {
+                    balance -= transaction.Amount + transaction.Fee;
+                }
+                if (transaction.To == address)
+                {
+                    balance += transaction.Amount;
+                }
+            }
+            return balance;
         }
     }
 }

@@ -15,7 +15,12 @@ namespace CW1.Models
         public double MiningDuration { get; set; }
         public int Difficulty { get; set; }
         public int Size { get; set; }
+        public string DiffucultyText { get; set; }
 
+        public Block()
+        {
+            
+        }
         public Block(int index, DateTime timeStamp, List<Transaction> transactions, string previousHash, int difficulty)
         {
             Index = index;

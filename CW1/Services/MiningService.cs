@@ -23,7 +23,8 @@ namespace CW1.Services
 
         public long MineBlock(Block block, int difficulty)
         {
-            string target = new string('0', difficulty);
+            //string target = new string('0', difficulty);
+            string target = "CAFE";
             _winningBlock = null;
             _found = false;
             _totalHashesChecked = 0;
@@ -43,6 +44,8 @@ namespace CW1.Services
                     Block newBlock = block.Copy();
                     newBlock.Nonce = nonce;
                     newBlock.Hash = _hashingService.ComputeHash(newBlock);
+
+                    //Console.WriteLine($"Checking nonce: {newBlock.Hash}");
 
                     localHashes++;
 
@@ -96,6 +99,7 @@ namespace CW1.Services
 
             block.Nonce = _winningBlock.Nonce;
             block.Hash = _winningBlock.Hash;
+            block.DiffucultyText = target;
             return _winningBlock.Nonce;
         }
     }
